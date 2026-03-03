@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+}
+
+/* Ensure Tailwind v4 respects the .dark class */
+@custom-variant dark (&:where(.dark, .dark *));
+
+body {
+  @apply bg-[#F5F5F5] text-black dark:bg-[#030712] dark:text-gray-100 transition-colors duration-300;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* Light themed scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #da3832;
+}
