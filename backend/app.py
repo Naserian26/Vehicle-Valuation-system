@@ -12,6 +12,8 @@ from auth import auth
 
 from rbac_auth import auth as rbac_auth
 
+from admin import admin
+
 from flask_jwt_extended import JWTManager
 from flask_mail import Mail
 from config import Config
@@ -38,8 +40,6 @@ app.url_map.strict_slashes = False
 
 # --- 4. CORS ---
 
-# Updated to ensure both /api and /api/auth are accessible
-
 CORS(app, resources={
 
     r"/api/*": {"origins": "*", "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"]},
@@ -55,6 +55,8 @@ CORS(app, resources={
 app.register_blueprint(api, url_prefix='/api')
 
 app.register_blueprint(rbac_auth, url_prefix='/api/auth')
+
+app.register_blueprint(admin, url_prefix='/api/admin')
 
 
 
@@ -78,7 +80,9 @@ def health_check():
 
             "auth": "/api/auth",
 
-            "vehicles": "/api/vehicles"
+            "vehicles": "/api/vehicles",
+
+            "admin": "/api/admin"
 
         }
 

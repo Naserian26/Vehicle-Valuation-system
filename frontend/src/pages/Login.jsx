@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +11,15 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Clear fields when component unmounts (navigating away)
+  useEffect(() => {
+    return () => {
+      setEmail('');
+      setPassword('');
+      setError('');
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,6 +39,7 @@ const Login = () => {
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password');
+      setPassword(''); // clear password on failed attempt
     } finally {
       setLoading(false);
     }
@@ -53,7 +63,7 @@ const Login = () => {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
           <div>
             <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2 transition-colors">Staff Email</label>
             <div className="relative">
@@ -62,6 +72,7 @@ const Login = () => {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="off"
                 className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white pl-10 pr-4 py-3 rounded-xl focus:ring-1 focus:ring-red-600 dark:focus:ring-red-500 outline-none transition-all font-medium"
                 placeholder="staff@kra.go.ke"
                 required
@@ -72,7 +83,7 @@ const Login = () => {
           <div>
             <div className="flex justify-between mb-2">
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest transition-colors">Password</label>
-              <Link to="/forgot-password" title="Reset your password" className="text-xs text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 font-bold uppercase tracking-wide transition-colors">
+              <Link to="/forgot-password" className="text-xs text-red-600 dark:text-red-500 hover:text-red-700 dark:hover:text-red-400 font-bold uppercase tracking-wide transition-colors">
                 Forgot password?
               </Link>
             </div>
@@ -82,6 +93,7 @@ const Login = () => {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
                 className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white pl-10 pr-4 py-3 rounded-xl focus:ring-1 focus:ring-red-600 dark:focus:ring-red-500 outline-none transition-all font-medium"
                 placeholder="••••••••"
                 required

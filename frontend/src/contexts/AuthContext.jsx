@@ -1,12 +1,46 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 
 const AuthContext = createContext(null);
+
+const INACTIVITY_TIMEOUT = 60 * 1000; // 1 minute
+const ACTIVITY_EVENTS = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(localStorage.getItem('keval_token'));
     const [loading, setLoading] = useState(true);
+    const inactivityTimer = useRef(null);
+
+    const logout = useCallback(() => {
+        localStorage.clear();
+        setToken(null);
+        setUser(null);
+        delete axios.defaults.headers.common['Authorization'];
+        clearTimeout(inactivityTimer.current);
+    }, []);
+
+    const resetInactivityTimer = useCallback(() => {
+        clearTimeout(inactivityTimer.current);
+        inactivityTimer.current = setTimeout(() => {
+            logout();
+            window.location.href = '/login';
+        }, INACTIVITY_TIMEOUT);
+    }, [logout]);
+
+    // Start/stop inactivity tracking based on login state
+    useEffect(() => {
+        if (!user) return;
+
+        // Start timer and listen for activity
+        resetInactivityTimer();
+        ACTIVITY_EVENTS.forEach(event => window.addEventListener(event, resetInactivityTimer));
+
+        return () => {
+            clearTimeout(inactivityTimer.current);
+            ACTIVITY_EVENTS.forEach(event => window.removeEventListener(event, resetInactivityTimer));
+        };
+    }, [user, resetInactivityTimer]);
 
     useEffect(() => {
         const storedToken = localStorage.getItem('keval_token');
@@ -20,7 +54,7 @@ export const AuthProvider = ({ children }) => {
             axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
         }
 
-        // Add interceptor to handle 401 Unauthorized
+        // Handle 401 Unauthorized
         const interceptor = axios.interceptors.response.use(
             (response) => response,
             (error) => {
@@ -48,13 +82,6 @@ export const AuthProvider = ({ children }) => {
         setToken(newToken);
         setUser({ role, email, mustChangePassword: mustChange });
         axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-    };
-
-    const logout = () => {
-        localStorage.clear();
-        setToken(null);
-        setUser(null);
-        delete axios.defaults.headers.common['Authorization'];
     };
 
     const updateMustChange = (val) => {

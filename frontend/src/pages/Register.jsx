@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { UserPlus, Mail, AlertCircle, CheckCircle } from 'lucide-react';
+import { UserPlus, Mail, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 const Register = () => {
     const [searchParams] = useSearchParams();
@@ -11,6 +13,7 @@ const Register = () => {
     const [email, setEmail] = useState('');
     const [isInviteValid, setIsInviteValid] = useState(false);
     const [error, setError] = useState('');
+    const [emailError, setEmailError] = useState('');
     const [success, setSuccess] = useState(false);
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
@@ -34,9 +37,24 @@ const Register = () => {
         }
     };
 
+    const handleEmailChange = (e) => {
+        const val = e.target.value;
+        setEmail(val);
+        setEmailError('');
+        if (val && !isValidEmail(val)) {
+            setEmailError('Please enter a valid email address.');
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+
+        if (!isValidEmail(email)) {
+            setEmailError('Please enter a valid email address.');
+            return;
+        }
+
         setLoading(true);
 
         try {
@@ -46,11 +64,21 @@ const Register = () => {
             await axios.post('http://localhost:5000/api/auth/register', payload);
             setSuccess(true);
         } catch (err) {
-            setError(err.response?.data?.message || 'Registration failed. Please try again.');
+            const msg = err.response?.data?.message || '';
+            // Surface "already exists" as an email-level error
+            if (msg.toLowerCase().includes('exist') || msg.toLowerCase().includes('already') || err.response?.status === 409) {
+                setEmailError('An account with this email already exists.');
+            } else {
+                setError(msg || 'Registration failed. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
     };
+
+    // Determine email field state
+    const emailValid = email && isValidEmail(email) && !emailError;
+    const emailInvalid = emailError;
 
     if (success) {
         return (
@@ -65,10 +93,7 @@ const Register = () => {
                         Please check your email and use it to log in.
                     </p>
                     <button
-                        onClick={() => {
-                            logout();
-                            navigate('/login');
-                        }}
+                        onClick={() => { logout(); navigate('/login'); }}
                         className="w-full bg-gray-900 dark:bg-gray-800 hover:bg-black dark:hover:bg-gray-700 text-white font-bold py-4 rounded-xl transition-all shadow-sm uppercase tracking-widest text-sm"
                     >
                         Back to Login
@@ -93,12 +118,12 @@ const Register = () => {
 
                 {error && (
                     <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 text-red-600 dark:text-red-400 p-3 rounded-xl mb-6 flex items-center gap-2 transition-colors">
-                        <AlertCircle className="w-5 h-5" />
+                        <AlertCircle className="w-5 h-5 flex-shrink-0" />
                         <span className="text-sm font-bold uppercase tracking-wide">{error}</span>
                     </div>
                 )}
 
-                <form onSubmit={handleSubmit} className="space-y-6">
+                <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
                     <div>
                         <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2 transition-colors">Internal Email Address</label>
                         <div className="relative">
@@ -106,21 +131,43 @@ const Register = () => {
                             <input
                                 type="email"
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                onChange={handleEmailChange}
                                 disabled={isInviteValid}
-                                className={`w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white pl-10 pr-4 py-3 rounded-xl focus:ring-1 focus:ring-red-600 dark:focus:ring-red-500 outline-none transition-all font-medium ${isInviteValid ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                className={`w-full bg-gray-50 dark:bg-gray-800 border text-gray-900 dark:text-white pl-10 pr-10 py-3 rounded-xl focus:ring-1 outline-none transition-all font-medium
+                                    ${isInviteValid ? 'opacity-50 cursor-not-allowed border-gray-200 dark:border-gray-700' : ''}
+                                    ${!isInviteValid && emailInvalid ? 'border-red-400 dark:border-red-600 focus:ring-red-500' : ''}
+                                    ${!isInviteValid && emailValid ? 'border-green-400 dark:border-green-600 focus:ring-green-500' : ''}
+                                    ${!isInviteValid && !emailInvalid && !emailValid ? 'border-gray-200 dark:border-gray-700 focus:ring-red-600' : ''}
+                                `}
                                 placeholder="name@kra.go.ke"
                                 required
                             />
+                            {/* Inline status icon */}
+                            {!isInviteValid && email && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                    {emailValid
+                                        ? <CheckCircle className="w-4 h-4 text-green-500" />
+                                        : <XCircle className="w-4 h-4 text-red-500" />
+                                    }
+                                </div>
+                            )}
                         </div>
+
+                        {/* Status messages */}
                         {isInviteValid && (
-                            <p className="text-xs text-green-600 dark:text-green-500 font-bold uppercase mt-2 transition-colors">Verified invitation source</p>
+                            <p className="text-xs text-green-600 dark:text-green-500 font-bold uppercase mt-2 transition-colors">✓ Verified invitation source</p>
+                        )}
+                        {emailError && (
+                            <p className="text-xs text-red-500 dark:text-red-400 font-bold uppercase mt-2">{emailError}</p>
+                        )}
+                        {emailValid && !isInviteValid && (
+                            <p className="text-xs text-green-600 dark:text-green-500 font-bold uppercase mt-2">✓ Valid email format</p>
                         )}
                     </div>
 
                     <button
                         type="submit"
-                        disabled={loading || (token && !isInviteValid && !error)}
+                        disabled={loading || (token && !isInviteValid && !error) || !!emailError || !email}
                         className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
                     >
                         {loading ? 'Processing...' : 'Get System Access'}

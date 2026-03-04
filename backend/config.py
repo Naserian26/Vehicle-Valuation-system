@@ -26,6 +26,6 @@ class Config:
     MAIL_PORT = 465
     MAIL_USE_TLS = False
     MAIL_USE_SSL = True
-    MAIL_USERNAME = os.environ.get("MAIL_USERNAME", "naserianmercy20@gmail.com")
+    MAIL_USERNAME = os.environ.get("MAIL_USERNAME", "info@calc.com")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD", "wusd oihe mzav akue")
     MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", "info@calc.com")

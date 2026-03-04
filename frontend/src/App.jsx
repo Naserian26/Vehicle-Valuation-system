@@ -10,6 +10,8 @@ import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import ChangePassword from './pages/ChangePassword';
 import UserManagement from './pages/UserManagementEnhanced';
+import Logs from './pages/Logs';
+import EmailManagement from './pages/EmailManagement';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -66,8 +68,21 @@ function AppRoutes() {
       } />
 
       <Route path="/users" element={
-        <ProtectedRoute>
+        <ProtectedRoute allowedRoles={['super_admin', 'business_admin']}>
           <AppLayout><UserManagement /></AppLayout>
+        </ProtectedRoute>
+      } />
+
+      {/* Admin Routes */}
+      <Route path="/admin/logs" element={
+        <ProtectedRoute allowedRoles={['super_admin', 'business_admin']}>
+          <AppLayout><Logs /></AppLayout>
+        </ProtectedRoute>
+      } />
+
+      <Route path="/admin/emails" element={
+        <ProtectedRoute allowedRoles={['super_admin', 'business_admin']}>
+          <AppLayout><EmailManagement /></AppLayout>
         </ProtectedRoute>
       } />
 
