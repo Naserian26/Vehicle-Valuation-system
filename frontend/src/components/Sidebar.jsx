@@ -40,80 +40,78 @@ const Sidebar = ({ userRole, onLogout }) => {
   ];
 
   const navLinkClass = ({ isActive }) => `
-    flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200
+    flex items-center gap-3 px-4 py-3 transition-all duration-200
     ${isActive
-      ? 'bg-[#DA3832]/10 text-[#DA3832] font-bold border-l-2 border-[#DA3832]'
-      : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'}
+      ? 'bg-[#DA3832] text-white font-bold'
+      : 'text-black dark:text-gray-400 hover:bg-black hover:text-white dark:hover:bg-gray-800 dark:hover:text-white'}
   `;
 
   return (
-    <div className="h-screen w-64 bg-white dark:bg-[#0a0a0a] text-gray-800 dark:text-gray-100 flex flex-col fixed left-0 top-0 shadow-lg z-50 border-r border-gray-200 dark:border-gray-800 transition-colors">
+    <div className="h-screen w-64 flex flex-col fixed left-0 top-0 z-50 transition-colors
+      bg-white dark:bg-[#0a0a0a] border-r-2 border-black dark:border-gray-800">
 
-      {/* Logo Section */}
-      <div className="h-24 flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-800">
-        <img src={kraFullLogo} alt="KRA Logo" className="h-12 object-contain" />
+      {/* Logo + Dark Mode Toggle */}
+      <div className="flex items-center justify-between px-4 py-5 border-b-2 border-black dark:border-gray-800">
+        <img src={kraFullLogo} alt="KRA Logo" className="h-10 object-contain" />
         <button
           onClick={(e) => { e.preventDefault(); toggleDarkMode(); }}
           title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-[#DA3832] dark:hover:text-[#DA3832] transition-all cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-gray-700"
+          className="w-9 h-9 flex items-center justify-center
+            border-2 border-black dark:border-gray-600
+            bg-white dark:bg-gray-800
+            text-black dark:text-gray-300
+            hover:bg-[#DA3832] hover:text-white hover:border-[#DA3832]
+            dark:hover:bg-[#DA3832] dark:hover:text-white dark:hover:border-[#DA3832]
+            transition-all cursor-pointer"
         >
-          {isDarkMode ? <Sun size={20} className="animate-pulse" /> : <Moon size={20} />}
+          {isDarkMode ? <Sun size={15} /> : <Moon size={15} />}
         </button>
       </div>
 
-      {/* User Info */}
-      <div className="p-6 border-b border-gray-100 dark:border-gray-800">
-        <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">User Role</p>
-        <p className="text-sm font-bold text-gray-900 dark:text-white">
+      {/* User Role Badge */}
+      <div className="px-4 py-4 border-b-2 border-black dark:border-gray-800 bg-black dark:bg-gray-900">
+        <p className="text-[10px] text-[#DA3832] font-black uppercase tracking-widest mb-1">User Role</p>
+        <p className="text-sm font-black text-white tracking-wide">
           {userRole?.replace(/_/g, ' ').toUpperCase()}
         </p>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-
-        {/* Main Items */}
+      <nav className="flex-1 py-3 space-y-0.5 overflow-y-auto px-2">
         {mainMenuItems.map((item) => (
           <NavLink key={item.id} to={item.path} className={navLinkClass}>
-            <item.icon size={20} />
-            <span className="text-sm">{item.label}</span>
+            <item.icon size={18} />
+            <span className="text-sm font-bold tracking-wide">{item.label}</span>
           </NavLink>
         ))}
 
-        {/* Admin Section */}
         {isAdmin && (
-          <div className="pt-2">
-            {/* Divider */}
+          <div className="pt-4">
             <div className="flex items-center gap-2 px-2 py-2 mb-1">
-              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Admin</span>
-              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+              <div className="flex-1 h-px bg-black dark:bg-gray-700" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-[#DA3832]">Admin</span>
+              <div className="flex-1 h-px bg-black dark:bg-gray-700" />
             </div>
 
-            {/* Collapsible Admin Button */}
             <button
               onClick={() => setAdminOpen(!adminOpen)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 
+              className={`w-full flex items-center gap-3 px-4 py-3 transition-all duration-200 font-bold text-sm
                 ${isAdminSectionActive
-                  ? 'bg-[#DA3832]/10 text-[#DA3832] font-bold'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-white'
+                  ? 'bg-[#DA3832] text-white'
+                  : 'text-black dark:text-gray-400 hover:bg-black hover:text-white dark:hover:bg-gray-800 dark:hover:text-white'
                 }`}
             >
-              <Shield size={20} />
-              <span className="text-sm flex-1 text-left">Admin Panel</span>
-              {adminOpen
-                ? <ChevronDown size={16} className="transition-transform duration-200" />
-                : <ChevronRight size={16} className="transition-transform duration-200" />
-              }
+              <Shield size={18} />
+              <span className="flex-1 text-left tracking-wide">Admin Panel</span>
+              {adminOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
 
-            {/* Submenu Items */}
             {adminOpen && (
-              <div className="ml-4 mt-1 space-y-1 border-l-2 border-gray-100 dark:border-gray-800 pl-3">
+              <div className="ml-4 mt-0.5 space-y-0.5 border-l-2 border-[#DA3832] pl-2">
                 {adminMenuItems.map((item) => (
                   <NavLink key={item.id} to={item.path} className={navLinkClass}>
-                    <item.icon size={18} />
-                    <span className="text-sm">{item.label}</span>
+                    <item.icon size={16} />
+                    <span className="text-sm font-bold tracking-wide">{item.label}</span>
                   </NavLink>
                 ))}
               </div>
@@ -122,11 +120,14 @@ const Sidebar = ({ userRole, onLogout }) => {
         )}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-100 dark:border-gray-800">
+      {/* Logout */}
+      <div className="border-t-2 border-black dark:border-gray-800">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-2 px-4 py-3 text-[#DA3832] hover:bg-[#DA3832]/10 rounded-lg transition-colors text-sm font-bold"
+          className="w-full flex items-center gap-3 px-4 py-4
+            text-black dark:text-gray-400
+            hover:bg-[#DA3832] hover:text-white
+            transition-colors text-sm font-black tracking-wide uppercase"
         >
           <LogOut size={18} />
           <span>Logout</span>

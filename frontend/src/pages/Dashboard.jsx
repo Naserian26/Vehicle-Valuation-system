@@ -12,7 +12,7 @@ import {
   Legend
 } from 'chart.js';
 import { useAuth } from '../contexts/AuthContext';
-import { CarFront, Calculator, Users as UsersIcon } from 'lucide-react';
+import { CarFront, Calculator, Users as UsersIcon, TrendingUp, ArrowRight } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -20,13 +20,12 @@ const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // 1. ADDED top_vehicles TO INITIAL STATE
   const [stats, setStats] = useState({
     total_vehicles: 0,
     vehicles_by_year: {},
     total_users: 0,
     users_by_role: {},
-    top_vehicles: [] 
+    top_vehicles: []
   });
   const [matrix, setMatrix] = useState({});
   const [loading, setLoading] = useState(true);
@@ -36,8 +35,8 @@ const Dashboard = () => {
       setLoading(true);
       try {
         const [statsRes, matrixRes] = await Promise.all([
-          axios.get('http://localhost:5000/api/dashboard-stats'),
-          axios.get('http://localhost:5000/api/auth/matrix')
+          axios.get('/api/dashboard-stats'),
+          axios.get('/api/auth/matrix')
         ]);
         setStats(statsRes.data);
         setMatrix(matrixRes.data || {});
@@ -47,7 +46,6 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
-
     fetchDashboardData();
   }, []);
 
@@ -56,27 +54,71 @@ const Dashboard = () => {
   const canManageDB = matrix.search_vehicle_db?.[role];
   const canManageUsers = matrix.create_users?.[role] || matrix.assign_user_roles?.[role];
 
-  // 2. UPDATED CHART DATA TO MAP THROUGH TOP VEHICLES
+  const actions = [
+    canManageDB && { icon: CarFront, label: 'Vehicle Search', sub: 'Search global directory', path: '/database' },
+    canValue && { icon: Calculator, label: 'Run Valuation', sub: 'Calculate vehicle taxes', path: '/valuation' },
+    canManageUsers && { icon: UsersIcon, label: 'User Management', sub: 'Manage access levels', path: '/users' },
+  ].filter(Boolean);
+
   const chartData = {
     labels: stats.top_vehicles?.map(v => v._id) || [],
-    datasets: [
-      {
-        label: 'Vehicle Count',
-        data: stats.top_vehicles?.map(v => v.count) || [],
-        backgroundColor: '#DA3832', // KRA Red
+    datasets: [{
+      label: 'Vehicles',
+      data: stats.top_vehicles?.map(v => v.count) || [],
+      backgroundColor: '#DA3832',
+      hoverBackgroundColor: '#000000',
+      borderWidth: 0,
+      borderRadius: 0,
+    }]
+  };
+
+  const chartOptions = {
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#000000',
+        titleColor: '#DA3832',
+        bodyColor: '#ffffff',
+        borderColor: '#DA3832',
+        borderWidth: 1,
+        padding: 10,
+        titleFont: { weight: 'bold', size: 11 },
       }
-    ]
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { color: 'rgba(0,0,0,0.06)' },
+        ticks: { color: '#000000', font: { weight: 'bold', size: 10 } },
+        border: { color: '#000000', width: 2 }
+      },
+      x: {
+        grid: { display: false },
+        ticks: { color: '#000000', font: { weight: 'bold', size: 10 } },
+        border: { color: '#000000', width: 2 }
+      }
+    }
   };
 
   return (
     <div className="space-y-6">
+
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white uppercase transition-colors">Dashboard Overview</h1>
-        <div className="text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-900 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-800 transition-colors">
-          Logged in as: <span className="text-gray-900 dark:text-white font-bold">{user?.email}</span>
+        <div>
+          <p className="text-[10px] font-black text-[#DA3832] uppercase tracking-widest mb-1">Kenya Revenue Authority</p>
+          <h1 className="text-3xl font-black text-black dark:text-white uppercase tracking-tight">
+            Dashboard Overview
+          </h1>
+        </div>
+        <div className="bg-black dark:bg-gray-900 px-5 py-2.5">
+          <p className="text-[10px] text-[#DA3832] font-black uppercase tracking-widest">Logged in as</p>
+          <p className="text-white font-bold text-sm">{user?.email}</p>
         </div>
       </div>
 
+      {/* Stat Cards — lighter dividers, no outer border overlap */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Vehicles" value={stats.total_vehicles} />
         <StatCard title="2025 Vehicles" value={stats.vehicles_by_year?.['2025'] || 0} />
@@ -84,77 +126,71 @@ const Dashboard = () => {
         <StatCard title="Total Users" value={stats.total_users} />
       </div>
 
+      {/* Chart + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-6 shadow-sm transition-colors">
-          
-          {/* 3. UPDATED CHART TITLE */}
-          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6 transition-colors">Top Vehicles by Volume</h3>
-          
-          <div className="h-64">
+
+        {/* Chart */}
+        <div className="lg:col-span-2 border-2 border-black dark:border-gray-700 bg-white dark:bg-gray-900">
+          <div className="flex items-center justify-between px-6 py-4 border-b-2 border-black dark:border-gray-700 bg-black dark:bg-gray-800">
+            <div className="flex items-center gap-3">
+              <TrendingUp size={16} className="text-[#DA3832]" />
+              <h3 className="text-xs font-black text-white uppercase tracking-widest">Top Vehicles by Volume</h3>
+            </div>
+            <div className="w-2 h-2 bg-[#DA3832]" />
+          </div>
+          <div className="p-6 h-64">
             {loading ? (
-              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">Loading charts...</div>
+              <div className="h-full flex items-center justify-center gap-1">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="w-2 h-8 bg-[#DA3832] animate-pulse" style={{ animationDelay: `${i * 0.15}s` }} />
+                ))}
+              </div>
             ) : (
-              <Bar
-                data={chartData}
-                options={{
-                  maintainAspectRatio: false,
-                  plugins: { legend: { display: false } },
-                  scales: {
-                    y: { beginAtZero: true, grid: { color: '#374151' }, ticks: { color: '#9ca3af' } },
-                    x: { grid: { display: false }, ticks: { color: '#9ca3af' } }
-                  }
-                }}
-              />
+              <Bar data={chartData} options={chartOptions} />
             )}
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-2">Quick Actions</h3>
-          {canManageDB && (
-            <button
-              onClick={() => navigate('/database')}
-              className="w-full flex items-center gap-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-red-600 dark:hover:border-red-500 p-4 rounded-xl transition-all group"
-            >
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 transition-colors">
-                <CarFront size={20} />
-              </div>
-              <div className="text-left">
-                <p className="font-bold text-sm text-gray-900 dark:text-white transition-colors">Vehicle Search</p>
-                <p className="text-xs text-gray-400 transition-colors">Search global directory</p>
-              </div>
-            </button>
-          )}
+        {/* Quick Actions — always filled, no empty space */}
+        <div className="border-2 border-black dark:border-gray-700 flex flex-col">
+          <div className="px-5 py-4 bg-black dark:bg-gray-800 border-b-2 border-black dark:border-gray-700 shrink-0">
+            <p className="text-xs font-black text-white uppercase tracking-widest">Quick Actions</p>
+          </div>
 
-          {canValue && (
-            <button
-              onClick={() => navigate('/valuation')}
-              className="w-full flex items-center gap-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-red-600 dark:hover:border-red-500 p-4 rounded-xl transition-all group"
-            >
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 transition-colors">
-                <Calculator size={20} />
+          <div className="flex flex-col flex-1">
+            {actions.length > 0 ? (
+              <>
+                {actions.map(({ icon: Icon, label, sub, path }, i) => (
+                  <button
+                    key={i}
+                    onClick={() => navigate(path)}
+                    className={`flex items-center gap-4 px-5 py-5 flex-1
+                      ${i < actions.length - 1 ? 'border-b border-black/10 dark:border-gray-700' : ''}
+                      bg-white dark:bg-gray-900
+                      hover:bg-[#DA3832] dark:hover:bg-[#DA3832]
+                      group transition-all duration-200`}
+                  >
+                    <div className="p-2.5 bg-black dark:bg-gray-800 group-hover:bg-white transition-colors shrink-0">
+                      <Icon size={18} className="text-[#DA3832] group-hover:text-[#DA3832]" />
+                    </div>
+                    <div className="text-left flex-1">
+                      <p className="font-black text-sm text-black dark:text-white group-hover:text-white transition-colors uppercase tracking-wide">{label}</p>
+                      <p className="text-xs text-gray-400 group-hover:text-white/70 transition-colors mt-0.5">{sub}</p>
+                    </div>
+                    <ArrowRight size={14} className="text-gray-300 group-hover:text-white transition-colors shrink-0" />
+                  </button>
+                ))}
+              </>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center px-5 py-8 bg-white dark:bg-gray-900">
+                <div className="w-8 h-8 border-2 border-black dark:border-gray-600 flex items-center justify-center mb-3">
+                  <div className="w-2 h-2 bg-[#DA3832]" />
+                </div>
+                <p className="text-xs font-black text-black dark:text-gray-400 uppercase tracking-widest text-center">No actions available</p>
+                <p className="text-xs text-gray-400 mt-1 text-center">Contact your administrator</p>
               </div>
-              <div className="text-left">
-                <p className="font-bold text-sm text-gray-900 dark:text-white transition-colors">Run Valuation</p>
-                <p className="text-xs text-gray-400 transition-colors">Calculate vehicle taxes</p>
-              </div>
-            </button>
-          )}
-
-          {canManageUsers && (
-            <button
-              onClick={() => navigate('/users')}
-              className="w-full flex items-center gap-4 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:border-red-600 dark:hover:border-red-500 p-4 rounded-xl transition-all group"
-            >
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 transition-colors">
-                <UsersIcon size={20} />
-              </div>
-              <div className="text-left">
-                <p className="font-bold text-sm text-gray-900 dark:text-white transition-colors">User Management</p>
-                <p className="text-xs text-gray-400 transition-colors">Manage access levels</p>
-              </div>
-            </button>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -162,9 +198,13 @@ const Dashboard = () => {
 };
 
 const StatCard = ({ title, value }) => (
-  <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-6 rounded-xl shadow-sm transition-colors">
-    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 transition-colors">{title}</p>
-    <p className="text-2xl font-black text-gray-900 dark:text-white transition-colors">{value?.toLocaleString() || 0}</p>
+  <div className="bg-white dark:bg-gray-900 border-2 border-black dark:border-gray-700 p-6 relative
+    group hover:bg-black dark:hover:bg-gray-800 transition-colors duration-200">
+    <div className="absolute top-0 left-0 w-full h-1 bg-[#DA3832]" />
+    <p className="text-[10px] font-black text-gray-400 group-hover:text-[#DA3832] uppercase tracking-widest mb-2 transition-colors">{title}</p>
+    <p className="text-3xl font-black text-black dark:text-white group-hover:text-white transition-colors">
+      {value?.toLocaleString() || 0}
+    </p>
   </div>
 );
 

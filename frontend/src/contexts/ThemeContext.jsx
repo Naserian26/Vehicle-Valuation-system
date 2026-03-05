@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useLayoutEffect } from 'react';
+import React, { createContext, useContext, useState, useLayoutEffect } from 'react';
 
 const ThemeContext = createContext();
 
@@ -17,13 +17,12 @@ export const ThemeProvider = ({ children }) => {
       if (savedMode !== null) {
         return savedMode === 'true';
       }
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      return false; // Default: light mode
     } catch (e) {
       return false;
     }
   });
 
-  // Use useLayoutEffect to prevent flickering
   useLayoutEffect(() => {
     const root = window.document.documentElement;
     const body = window.document.body;
@@ -31,11 +30,9 @@ export const ThemeProvider = ({ children }) => {
     if (isDarkMode) {
       root.classList.add('dark');
       body.classList.add('dark');
-      console.log('Theme changed: DARK');
     } else {
       root.classList.remove('dark');
       body.classList.remove('dark');
-      console.log('Theme changed: LIGHT');
     }
 
     localStorage.setItem('darkMode', isDarkMode.toString());
@@ -45,14 +42,8 @@ export const ThemeProvider = ({ children }) => {
     setIsDarkMode(prev => !prev);
   };
 
-  const value = {
-    isDarkMode,
-    toggleDarkMode,
-    theme: isDarkMode ? 'dark' : 'light'
-  };
-
   return (
-    <ThemeContext.Provider value={value}>
+    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode, theme: isDarkMode ? 'dark' : 'light' }}>
       {children}
     </ThemeContext.Provider>
   );

@@ -2,160 +2,157 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, CheckCircle, AlertCircle, ShieldAlert } from 'lucide-react';
+import { Lock, CheckCircle, AlertCircle, ShieldAlert, Eye, EyeOff } from 'lucide-react';
 
 const passwordRules = [
-  { id: 'length',    label: 'At least 8 characters',       test: (p) => p.length >= 8 },
-  { id: 'upper',     label: 'Uppercase letter (A–Z)',       test: (p) => /[A-Z]/.test(p) },
-  { id: 'lower',     label: 'Lowercase letter (a–z)',       test: (p) => /[a-z]/.test(p) },
-  { id: 'number',    label: 'Number (0–9)',                 test: (p) => /[0-9]/.test(p) },
-  { id: 'special',   label: 'Special character (!@#$...)',  test: (p) => /[^A-Za-z0-9]/.test(p) },
+  { id: 'length',  label: 'At least 8 characters',      test: (p) => p.length >= 8 },
+  { id: 'upper',   label: 'Uppercase letter (A–Z)',      test: (p) => /[A-Z]/.test(p) },
+  { id: 'lower',   label: 'Lowercase letter (a–z)',      test: (p) => /[a-z]/.test(p) },
+  { id: 'number',  label: 'Number (0–9)',                test: (p) => /[0-9]/.test(p) },
+  { id: 'special', label: 'Special character (!@#$...)', test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
 const ChangePassword = () => {
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState(false);
-    const [loading, setLoading] = useState(false);
-    const { updateMustChange, user } = useAuth();
-    const navigate = useNavigate();
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const { updateMustChange, user } = useAuth();
+  const navigate = useNavigate();
 
-    const passedRules = passwordRules.filter(r => r.test(newPassword));
-    const allPassed = passedRules.length === passwordRules.length;
+  const passedRules = passwordRules.filter(r => r.test(newPassword));
+  const allPassed = passedRules.length === passwordRules.length;
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!allPassed) { setError('Password does not meet all requirements.'); return; }
+    if (newPassword !== confirmPassword) { setError('Passwords do not match.'); return; }
+    setLoading(true);
+    try {
+      await axios.post('/api/auth/change-password', { new_password: newPassword });
+      setSuccess(true);
+      updateMustChange(false);
+      setTimeout(() => navigate('/dashboard'), 2000);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to change password. Please try again.');
+    } finally { setLoading(false); }
+  };
 
-        if (!allPassed) {
-            setError('Password does not meet all requirements.');
-            return;
-        }
+  return (
+    <div className="min-h-screen bg-white dark:bg-[#030712] flex items-center justify-center p-4">
+      <div className="max-w-md w-full border-2 border-black dark:border-gray-700 bg-white dark:bg-gray-900">
 
-        if (newPassword !== confirmPassword) {
-            setError('Passwords do not match.');
-            return;
-        }
-
-        setLoading(true);
-
-        try {
-            await axios.post('http://localhost:5000/api/auth/change-password', { new_password: newPassword });
-            setSuccess(true);
-            updateMustChange(false);
-            setTimeout(() => navigate('/dashboard'), 2000);
-        } catch (err) {
-            setError(err.response?.data?.message || 'Failed to change password. Please try again.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <div className="min-h-screen bg-gray-50 dark:bg-[#030712] flex items-center justify-center p-4 transition-colors duration-300">
-            <div className="max-w-md w-full bg-white dark:bg-gray-900 rounded-2xl shadow-sm p-8 border border-gray-200 dark:border-gray-800 transition-colors duration-300">
-                <div className="text-center mb-8">
-                    <div className="bg-red-50 dark:bg-red-900/20 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                        <Lock className="w-8 h-8 text-red-600 dark:text-red-500" />
-                    </div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-white uppercase tracking-tight transition-colors">Security Update</h1>
-                    {user?.mustChangePassword ? (
-                        <div className="mt-3 flex items-center justify-center gap-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-2 rounded-lg border border-red-100 dark:border-red-900/50 px-4">
-                            <ShieldAlert className="w-4 h-4" />
-                            <p className="text-xs font-bold uppercase tracking-wider">Mandatory password update required</p>
-                        </div>
-                    ) : (
-                        <p className="text-gray-500 dark:text-gray-400 mt-2 font-medium transition-colors">Update your account password</p>
-                    )}
-                </div>
-
-                {success && (
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-900/50 text-green-600 dark:text-green-400 p-3 rounded-xl mb-6 flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="text-sm font-bold uppercase tracking-wide">Update successful! Accessing system...</span>
-                    </div>
-                )}
-
-                {error && (
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/50 text-red-600 dark:text-red-400 p-3 rounded-xl mb-6 flex items-center gap-2">
-                        <AlertCircle className="w-5 h-5" />
-                        <span className="text-sm font-bold uppercase tracking-wide">{error}</span>
-                    </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">New Password</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
-                            <input
-                                type="password"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                autoComplete="new-password"
-                                className="w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white pl-10 pr-4 py-3 rounded-xl focus:ring-1 focus:ring-red-600 dark:focus:ring-red-500 outline-none transition-all font-medium"
-                                placeholder="••••••••"
-                                required
-                            />
-                        </div>
-
-                        {/* Live password checklist */}
-                        {newPassword.length > 0 && (
-                            <div className="mt-3 space-y-1.5 bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
-                                {passwordRules.map(rule => {
-                                    const passed = rule.test(newPassword);
-                                    return (
-                                        <div key={rule.id} className="flex items-center gap-2">
-                                            <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${passed ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                                                {passed && <CheckCircle className="w-3 h-3 text-white" />}
-                                            </div>
-                                            <span className={`text-xs font-medium transition-colors ${passed ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>
-                                                {rule.label}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2">Confirm New Password</label>
-                        <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500" />
-                            <input
-                                type="password"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                autoComplete="new-password"
-                                className={`w-full bg-gray-50 dark:bg-gray-800 border text-gray-900 dark:text-white pl-10 pr-4 py-3 rounded-xl focus:ring-1 outline-none transition-all font-medium ${
-                                    confirmPassword.length > 0
-                                        ? newPassword === confirmPassword
-                                            ? 'border-green-400 dark:border-green-600 focus:ring-green-500'
-                                            : 'border-red-400 dark:border-red-600 focus:ring-red-500'
-                                        : 'border-gray-200 dark:border-gray-700 focus:ring-red-600'
-                                }`}
-                                placeholder="••••••••"
-                                required
-                            />
-                        </div>
-                        {confirmPassword.length > 0 && newPassword !== confirmPassword && (
-                            <p className="text-xs text-red-500 font-bold mt-1 uppercase">Passwords do not match</p>
-                        )}
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={loading || success || !allPassed}
-                        className="w-full bg-gray-900 dark:bg-gray-800 hover:bg-black dark:hover:bg-gray-700 text-white font-bold py-4 rounded-xl transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest text-sm"
-                    >
-                        {loading ? 'Processing...' : 'Secure Account'}
-                    </button>
-                </form>
+        {/* Header Bar */}
+        <div className="bg-black dark:bg-gray-800 px-8 py-6 border-b-2 border-black dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#DA3832] flex items-center justify-center">
+              <Lock className="w-5 h-5 text-white" />
             </div>
+            <div>
+              <p className="text-[10px] font-black text-[#DA3832] uppercase tracking-widest">KRA System</p>
+              <h1 className="text-lg font-black text-white uppercase">Security Update</h1>
+            </div>
+          </div>
         </div>
-    );
+
+        <div className="p-8">
+          {user?.mustChangePassword && (
+            <div className="border-2 border-[#DA3832] bg-red-50 dark:bg-red-900/10 p-3 mb-6 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-[#DA3832] shrink-0" />
+              <span className="text-xs font-black text-[#DA3832] uppercase">Mandatory password update required</span>
+            </div>
+          )}
+
+          {success && (
+            <div className="border-2 border-green-500 bg-green-50 dark:bg-green-900/10 p-3 mb-6 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
+              <span className="text-xs font-black text-green-600 uppercase">Update successful! Accessing system...</span>
+            </div>
+          )}
+          {error && (
+            <div className="border-2 border-[#DA3832] bg-red-50 dark:bg-red-900/10 p-3 mb-6 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-[#DA3832] shrink-0" />
+              <span className="text-xs font-black text-[#DA3832] uppercase">{error}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-5" autoComplete="off">
+            {/* New Password */}
+            <div>
+              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">New Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type={showNew ? 'text' : 'password'} value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password"
+                  className="w-full border-2 border-black dark:border-gray-700 focus:border-[#DA3832] bg-white dark:bg-gray-800 text-black dark:text-white pl-10 pr-10 py-3 text-sm font-bold outline-none transition-colors"
+                  placeholder="••••••••" required
+                />
+                <button type="button" onClick={() => setShowNew(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+                  {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+
+              {/* Password Rules Checklist */}
+              {newPassword.length > 0 && (
+                <div className="mt-3 border-2 border-black dark:border-gray-700 p-3 space-y-2 bg-gray-50 dark:bg-gray-800">
+                  {passwordRules.map(rule => {
+                    const passed = rule.test(newPassword);
+                    return (
+                      <div key={rule.id} className="flex items-center gap-2.5">
+                        <div className={`w-4 h-4 flex items-center justify-center shrink-0 transition-colors ${passed ? 'bg-[#DA3832]' : 'border-2 border-gray-300 dark:border-gray-600'}`}>
+                          {passed && <CheckCircle className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className={`text-xs font-bold transition-colors ${passed ? 'text-black dark:text-white' : 'text-gray-400'}`}>
+                          {rule.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Confirm Password */}
+            <div>
+              <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Confirm New Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type={showConfirm ? 'text' : 'password'} value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password"
+                  className={`w-full border-2 bg-white dark:bg-gray-800 text-black dark:text-white pl-10 pr-10 py-3 text-sm font-bold outline-none transition-colors
+                    ${confirmPassword.length > 0
+                      ? newPassword === confirmPassword ? 'border-green-500' : 'border-[#DA3832]'
+                      : 'border-black dark:border-gray-700 focus:border-[#DA3832]'}`}
+                  placeholder="••••••••" required
+                />
+                <button type="button" onClick={() => setShowConfirm(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black dark:hover:text-white transition-colors">
+                  {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {confirmPassword.length > 0 && newPassword !== confirmPassword && (
+                <p className="text-[10px] text-[#DA3832] font-black uppercase mt-1.5">Passwords do not match</p>
+              )}
+            </div>
+
+            <button
+              type="submit" disabled={loading || success || !allPassed}
+              className="w-full bg-black hover:bg-[#DA3832] text-white font-black py-4 uppercase tracking-widest text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Processing...' : 'Secure Account'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default ChangePassword;

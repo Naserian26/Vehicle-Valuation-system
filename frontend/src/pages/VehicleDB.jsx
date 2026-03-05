@@ -3,7 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus, Trash2, Edit, CarFront, Search, Fuel, Gauge,
-  Calendar, ChevronLeft, ChevronRight, AlertCircle, Calculator
+  ChevronLeft, ChevronRight, AlertCircle, Calculator, X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -19,74 +19,51 @@ const VehicleDB = () => {
   const [matrix, setMatrix] = useState({});
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-
-  // NEW: State for Add/Edit Modal
   const [showModal, setShowModal] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState(null);
-  const [formData, setFormData] = useState({ 
+  const [formData, setFormData] = useState({
     make: '', model: '', engineCc: '', fuelType: 'GASOLINE', crsp: '', bodyType: '', driveType: '', year: '2025'
   });
 
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
-
-  useEffect(() => {
-    fetchVehicles();
-  }, [page, search, dataYear]);
+  useEffect(() => { fetchInitialData(); }, []);
+  useEffect(() => { fetchVehicles(); }, [page, search, dataYear]);
 
   const fetchInitialData = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/auth/matrix');
+      const res = await axios.get('/api/auth/matrix');
       setMatrix(res.data || {});
-    } catch (err) {
-      console.error('Error fetching matrix:', err);
-    }
+    } catch (err) { console.error(err); }
   };
 
   const fetchVehicles = async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`http://localhost:5000/api/vehicles`, {
-        params: {
-          page,
-          search,
-          year: dataYear
-        }
-      });
+      const res = await axios.get('/api/vehicles', { params: { page, search, year: dataYear } });
       setVehicles(res.data.vehicles || []);
       setTotalPages(res.data.pages || 1);
-    } catch (err) {
-      console.error('Error fetching vehicles:', err);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLoading(false); }
   };
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`http://localhost:5000/api/vehicles/${id}`);
+      await axios.delete(`/api/vehicles/${id}`);
       fetchVehicles();
       setShowDeleteConfirm(null);
-    } catch (err) {
-      alert('Failed to delete vehicle');
-    }
+    } catch { alert('Failed to delete vehicle'); }
   };
 
-  // NEW: Submit handler for the Add/Edit Modal
   const handleModalSubmit = async (e) => {
     e.preventDefault();
     try {
       if (editingVehicle) {
-        await axios.put(`http://localhost:5000/api/vehicles/${editingVehicle._id}`, formData);
+        await axios.put(`/api/vehicles/${editingVehicle._id}`, formData);
       } else {
-        await axios.post('http://localhost:5000/api/vehicles', formData);
+        await axios.post('/api/vehicles', formData);
       }
       setShowModal(false);
-      fetchVehicles(); // Refresh the directory
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to save vehicle');
-    }
+      fetchVehicles();
+    } catch (err) { alert(err.response?.data?.message || 'Failed to save vehicle'); }
   };
 
   const role = (user?.role?.toLowerCase() === 'user' ? 'viewer' : user?.role?.toLowerCase()) || 'viewer';
@@ -94,276 +71,284 @@ const VehicleDB = () => {
   const canEditDelete = matrix.edit_vehicles?.[role];
   const canCalculateTax = matrix.calculate_taxes?.[role];
 
+  const yearFilters = ['ALL', '2025', '2020'];
+
   return (
     <div className="space-y-6">
+
+      {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white uppercase transition-colors">Vehicle Directory</h1>
+          <p className="text-[10px] font-black text-[#DA3832] uppercase tracking-widest mb-1">Kenya Revenue Authority</p>
+          <h1 className="text-3xl font-black text-black dark:text-white uppercase tracking-tight">Vehicle Directory</h1>
           <p className="text-xs text-gray-400 font-bold uppercase tracking-widest mt-1">
-            Active Global Inventory {dataYear ? `(${dataYear})` : '(All Years)'}
+            {dataYear ? `${dataYear} Inventory` : 'All Years'}
           </p>
         </div>
 
-        <div className="flex bg-white dark:bg-gray-900 p-1 rounded-lg border border-gray-200 dark:border-gray-800 transition-colors">
-          <button
-            onClick={() => { setDataYear(''); setPage(1); }}
-            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${dataYear === '' ? 'bg-red-600 text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-          >
-            ALL
-          </button>
-          <button
-            onClick={() => { setDataYear('2025'); setPage(1); }}
-            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${dataYear === '2025' ? 'bg-red-600 text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-          >
-            2025
-          </button>
-          <button
-            onClick={() => { setDataYear('2020'); setPage(1); }}
-            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${dataYear === '2020' ? 'bg-red-600 text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
-          >
-            2020
-          </button>
+        {/* Year Filter */}
+        <div className="flex border-2 border-black dark:border-gray-700 overflow-hidden">
+          {yearFilters.map((y) => (
+            <button
+              key={y}
+              onClick={() => { setDataYear(y === 'ALL' ? '' : y); setPage(1); }}
+              className={`px-5 py-2.5 text-xs font-black uppercase tracking-widest transition-colors border-r-2 border-black dark:border-gray-700 last:border-r-0
+                ${(dataYear === '' && y === 'ALL') || dataYear === y
+                  ? 'bg-[#DA3832] text-white'
+                  : 'bg-white dark:bg-gray-900 text-black dark:text-gray-400 hover:bg-black hover:text-white'}`}
+            >
+              {y}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="flex gap-4">
+      {/* Search + Add */}
+      <div className="flex gap-3">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by Make or Model..."
-            className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 focus:border-red-600 dark:focus:border-red-500 pl-12 pr-4 py-3 rounded-xl text-sm font-medium outline-none transition-all placeholder:italic text-gray-900 dark:text-white"
+            placeholder="Search by make or model..."
+            className="w-full bg-white dark:bg-gray-900 border-2 border-black dark:border-gray-700
+              focus:border-[#DA3832] dark:focus:border-[#DA3832]
+              pl-11 pr-4 py-3 text-sm font-bold outline-none transition-all
+              text-black dark:text-white placeholder:text-gray-300 placeholder:font-normal"
           />
         </div>
         {canAdd && dataYear === "2025" && (
-          <button 
+          <button
             onClick={() => {
               setEditingVehicle(null);
               setFormData({ make: '', model: '', engineCc: '', fuelType: 'GASOLINE', crsp: '', bodyType: '', driveType: '', year: '2025' });
               setShowModal(true);
             }}
-            className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold text-sm flex items-center gap-2 transition-all"
+            className="bg-black dark:bg-gray-800 hover:bg-[#DA3832] text-white px-6 py-3 font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all border-2 border-black dark:border-gray-700"
           >
-            <Plus size={18} /> Add New
+            <Plus size={16} /> Add Vehicle
           </button>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {/* Vehicle Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {loading ? (
-          [1, 2, 3, 4, 5, 6].map(i => (
-            <div key={i} className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm animate-pulse space-y-4">
-              <div className="h-4 bg-gray-100 rounded w-3/4 mx-auto"></div>
-              <div className="h-10 bg-gray-50 rounded"></div>
-              <div className="h-6 bg-gray-100 rounded w-1/2 mx-auto"></div>
+          [...Array(6)].map((_, i) => (
+            <div key={i} className="border-2 border-black dark:border-gray-700 p-6 animate-pulse space-y-4 bg-white dark:bg-gray-900">
+              <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded w-1/3" />
+              <div className="h-6 bg-gray-100 dark:bg-gray-800 rounded w-2/3" />
+              <div className="h-20 bg-gray-50 dark:bg-gray-800 rounded" />
+              <div className="h-8 bg-gray-100 dark:bg-gray-800 rounded" />
             </div>
           ))
         ) : vehicles.length === 0 ? (
-          <div className="col-span-full py-20 bg-white border border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center text-gray-400 space-y-4">
-            <CarFront size={48} className="opacity-20" />
-            <p className="font-bold uppercase tracking-widest text-sm text-center">
-              No vehicles found in the directory <br />
-              <span className="text-gray-300 font-medium lowercase">
-                {dataYear ? `matching filters for ${dataYear}` : 'matching current filters'}
-              </span>
-            </p>
+          <div className="col-span-full py-20 border-2 border-dashed border-black dark:border-gray-700 flex flex-col items-center justify-center gap-4">
+            <CarFront size={40} className="text-gray-200 dark:text-gray-700" />
+            <p className="font-black text-sm uppercase tracking-widest text-gray-400">No vehicles found</p>
           </div>
         ) : (
           vehicles.map(v => (
-            <div key={v._id} className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group flex flex-col">
-              {/* Card Header */}
-              <div className="mb-4 border-b border-gray-50 pb-4">
-                <div className="flex justify-between items-start mb-1">
-                  <span className="text-[10px] font-black text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-2 py-0.5 rounded tracking-widest uppercase transition-colors">
-                    {v.year} Model
-                  </span>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {canEditDelete && (
-                      <button 
+            <div key={v._id} className="bg-white dark:bg-gray-900 border-2 border-black dark:border-gray-700 flex flex-col group hover:border-[#DA3832] transition-colors">
+              {/* Card Top Bar */}
+              <div className="flex items-center justify-between px-4 py-2 bg-black dark:bg-gray-800 border-b-2 border-black dark:border-gray-700">
+                <span className="text-[10px] font-black text-[#DA3832] uppercase tracking-widest">{v.year} Model</span>
+                <div className="flex gap-1">
+                  {canEditDelete && (
+                    <>
+                      <button
                         onClick={() => {
                           setEditingVehicle(v);
                           setFormData({
-                            make: v.make || '',
-                            model: v.model || '',
-                            engineCc: v.engineCc || v.engine_cc || v.cc || '',
-                            fuelType: v.fuelType || v.fuel_type || 'GASOLINE',
-                            crsp: v.crsp || v.crsp_value || '',
-                            bodyType: v.bodyType || v.body_type || '',
-                            driveType: v.driveType || v.drive_type || '',
-                            year: v.year || '2025'
+                            make: v.make || '', model: v.model || '',
+                            engineCc: v.engineCc || v.engine_cc || '',
+                            fuelType: v.fuelType || 'GASOLINE',
+                            crsp: v.crsp || '', bodyType: v.bodyType || '',
+                            driveType: v.driveType || '', year: v.year || '2025'
                           });
                           setShowModal(true);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-gray-900 transition-colors bg-gray-50 rounded-lg"
+                        className="p-1.5 text-gray-400 hover:text-white transition-colors"
                       >
-                        <Edit size={14} />
+                        <Edit size={12} />
                       </button>
-                    )}
-                    {canEditDelete && (
                       <button
                         onClick={() => setShowDeleteConfirm(v._id)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 transition-colors bg-gray-50 rounded-lg"
+                        className="p-1.5 text-gray-400 hover:text-[#DA3832] transition-colors"
                       >
-                        <Trash2 size={14} />
+                        <Trash2 size={12} />
                       </button>
-                    )}
-                  </div>
+                    </>
+                  )}
                 </div>
-                <h3 className="text-lg font-black text-gray-900 dark:text-white uppercase truncate leading-tight transition-colors">
-                  {v.make} <span className="text-gray-400 dark:text-gray-500 font-bold">{v.model}</span>
+              </div>
+
+              {/* Card Body */}
+              <div className="p-5 flex flex-col flex-1">
+                <h3 className="text-lg font-black text-black dark:text-white uppercase mb-4 leading-tight">
+                  {v.make} <span className="text-gray-400 font-bold">{v.model}</span>
                 </h3>
-              </div>
 
-              {/* Data Grid */}
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-6">
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-gray-50 rounded text-gray-400">
-                    <Gauge size={14} />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-tighter transition-colors">Capacity</span>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 transition-colors">{v.engineCc || v.engine_cc || v.cc || '-'} CC</span>
-                  </div>
+                <div className="grid grid-cols-2 gap-3 mb-5">
+                  {[
+                    { icon: Gauge, label: 'Capacity', val: `${v.engineCc || v.engine_cc || '-'} CC` },
+                    { icon: Fuel, label: 'Fuel', val: v.fuelType || v.fuel_type || '-' },
+                    { icon: CarFront, label: 'Body', val: v.bodyType || v.body_type || '-' },
+                    { icon: Gauge, label: 'Drive', val: v.driveType || v.drive_type || '-' },
+                  ].map(({ icon: Icon, label, val }) => (
+                    <div key={label} className="flex items-center gap-2">
+                      <div className="p-1.5 bg-black dark:bg-gray-800 shrink-0">
+                        <Icon size={11} className="text-[#DA3832]" />
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase">{label}</p>
+                        <p className="text-xs font-bold text-black dark:text-gray-300 uppercase">{val}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-gray-50 rounded text-gray-400">
-                    <Fuel size={14} />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-tighter transition-colors">Fuel</span>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 capitalize transition-colors">{v.fuelType || v.fuel_type || '-'}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-gray-50 rounded text-gray-400">
-                    <CarFront size={14} />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-tighter transition-colors">Body Type</span>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase transition-colors">{v.bodyType || v.body_type || '-'}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-gray-50 rounded text-gray-400">
-                    <Gauge size={14} />
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-tighter transition-colors">Drive</span>
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase transition-colors">{v.driveType || v.drive_type || '-'}</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Card Footer */}
-              <div className="mt-auto border-t border-gray-50 dark:border-gray-800 pt-4 flex items-center justify-between transition-colors">
-                <div>
-                  <p className="text-[9px] font-black text-gray-300 dark:text-gray-600 uppercase tracking-widest leading-none transition-colors">CRSP Value</p>
-                  <p className="text-lg font-black text-red-600 dark:text-red-500 transition-colors">
-                    <span className="text-xs mr-0.5">KES</span>
-                    {v.crsp?.toLocaleString() || v.crsp_value?.toLocaleString() || '-'}
-                  </p>
+                <div className="mt-auto pt-4 border-t-2 border-black dark:border-gray-700 flex items-center justify-between">
+                  <div>
+                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest">CRSP Value</p>
+                    <p className="text-lg font-black text-[#DA3832]">
+                      <span className="text-xs mr-0.5">KES</span>
+                      {v.crsp?.toLocaleString() || v.crsp_value?.toLocaleString() || '-'}
+                    </p>
+                  </div>
+                  {canCalculateTax && (
+                    <button
+                      onClick={() => navigate('/valuation', { state: { vehicle: v } })}
+                      className="flex items-center gap-2 bg-black dark:bg-gray-800 hover:bg-[#DA3832] text-white px-4 py-2 font-black text-xs uppercase tracking-widest transition-all"
+                    >
+                      <Calculator size={12} /> Valuation
+                    </button>
+                  )}
                 </div>
-                {canCalculateTax && (
-                  <button
-                    onClick={() => navigate('/valuation', { state: { vehicle: v } })}
-                    className="flex items-center gap-2 bg-gray-900 dark:bg-gray-800 hover:bg-red-600 dark:hover:bg-red-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase transition-all shadow-sm"
-                  >
-                    <Calculator size={14} />
-                    Valuation
-                  </button>
-                )}
               </div>
             </div>
           ))
         )}
       </div>
 
+      {/* Pagination */}
       {!loading && totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-8">
+        <div className="flex justify-center items-center gap-1 mt-4">
           <button
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1}
-            className="p-2 border border-gray-200 text-gray-400 rounded-lg disabled:opacity-30 hover:bg-white transition-all"
+            className="p-2.5 border-2 border-black dark:border-gray-700 text-black dark:text-gray-400 disabled:opacity-30 hover:bg-black hover:text-white transition-all"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={16} />
           </button>
-          <div className="flex gap-1">
-            {[...Array(Math.min(5, totalPages))].map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setPage(i + 1)}
-                className={`w-10 h-10 rounded-lg font-bold text-xs transition-all ${page === i + 1 ? 'bg-red-600 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:border-red-600'}`}
-              >
-                {i + 1}
-              </button>
-            ))}
-          </div>
+          {[...Array(Math.min(5, totalPages))].map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setPage(i + 1)}
+              className={`w-10 h-10 font-black text-xs border-2 transition-all
+                ${page === i + 1
+                  ? 'bg-[#DA3832] border-[#DA3832] text-white'
+                  : 'border-black dark:border-gray-700 text-black dark:text-gray-400 hover:bg-black hover:text-white'}`}
+            >
+              {i + 1}
+            </button>
+          ))}
           <button
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages}
-            className="p-2 border border-gray-200 text-gray-400 rounded-lg disabled:opacity-30 hover:bg-white transition-all"
+            className="p-2.5 border-2 border-black dark:border-gray-700 text-black dark:text-gray-400 disabled:opacity-30 hover:bg-black hover:text-white transition-all"
           >
-            <ChevronRight size={20} />
+            <ChevronRight size={16} />
           </button>
         </div>
       )}
 
+      {/* Delete Confirm Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white p-8 rounded-2xl shadow-xl max-w-sm w-full text-center">
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-8 h-8 text-red-600" />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70">
+          <div className="bg-white dark:bg-gray-900 border-2 border-black dark:border-gray-700 p-8 w-full max-w-sm">
+            <div className="w-12 h-12 bg-[#DA3832] flex items-center justify-center mb-5">
+              <AlertCircle className="w-6 h-6 text-white" />
             </div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Delete Record</h2>
-            <p className="text-gray-500 text-sm mb-6">Are you sure you want to delete this vehicle from the directory?</p>
+            <h2 className="text-xl font-black text-black dark:text-white uppercase mb-2">Delete Vehicle?</h2>
+            <p className="text-gray-500 text-sm mb-6 font-medium">This will permanently remove the vehicle from the directory.</p>
             <div className="flex gap-3">
-              <button onClick={() => setShowDeleteConfirm(null)} className="flex-1 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-bold text-sm">Cancel</button>
-              <button onClick={() => handleDelete(showDeleteConfirm)} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-sm">Delete</button>
+              <button onClick={() => setShowDeleteConfirm(null)}
+                className="flex-1 py-3 border-2 border-black dark:border-gray-700 text-black dark:text-gray-300 font-black text-xs uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => handleDelete(showDeleteConfirm)}
+                className="flex-1 py-3 bg-[#DA3832] text-white font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-colors">
+                Delete
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* NEW: ADD / EDIT MODAL UI */}
+      {/* Add/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-xl w-full max-w-md border border-gray-200 dark:border-gray-800">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white uppercase mb-6">
-              {editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}
-            </h2>
-            <form onSubmit={handleModalSubmit} className="space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70">
+          <div className="bg-white dark:bg-gray-900 border-2 border-black dark:border-gray-700 w-full max-w-md">
+            <div className="flex items-center justify-between px-6 py-4 bg-black dark:bg-gray-800 border-b-2 border-black dark:border-gray-700">
+              <h2 className="text-sm font-black text-white uppercase tracking-widest">
+                {editingVehicle ? 'Edit Vehicle' : 'Add New Vehicle'}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-white transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleModalSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Make</label>
-                  <input required type="text" value={formData.make} onChange={e => setFormData({...formData, make: e.target.value})} className="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm bg-transparent dark:text-white" placeholder="e.g. TOYOTA" />
-                </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Model</label>
-                  <input required type="text" value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} className="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm bg-transparent dark:text-white" placeholder="e.g. COROLLA" />
-                </div>
+                {[
+                  { label: 'Make', key: 'make', placeholder: 'TOYOTA', span: 1 },
+                  { label: 'Model', key: 'model', placeholder: 'COROLLA', span: 1 },
+                  { label: 'Engine CC', key: 'engineCc', placeholder: '1500', type: 'number', span: 1 },
+                ].map(({ label, key, placeholder, type, span }) => (
+                  <div key={key} className={span === 2 ? 'col-span-2' : ''}>
+                    <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">{label}</label>
+                    <input
+                      required type={type || 'text'}
+                      value={formData[key]}
+                      onChange={e => setFormData({ ...formData, [key]: e.target.value })}
+                      placeholder={placeholder}
+                      className="w-full border-2 border-black dark:border-gray-700 p-2.5 text-sm font-bold bg-white dark:bg-gray-800 text-black dark:text-white focus:border-[#DA3832] outline-none transition-colors"
+                    />
+                  </div>
+                ))}
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Engine CC</label>
-                  <input required type="number" value={formData.engineCc} onChange={e => setFormData({...formData, engineCc: e.target.value})} className="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm bg-transparent dark:text-white" placeholder="e.g. 1500" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fuel Type</label>
-                  <select value={formData.fuelType} onChange={e => setFormData({...formData, fuelType: e.target.value})} className="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm bg-transparent dark:text-white">
-                    <option value="GASOLINE">Gasoline</option>
-                    <option value="DIESEL">Diesel</option>
-                    <option value="HYBRID">Hybrid</option>
-                    <option value="ELECTRIC">Electric</option>
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Fuel Type</label>
+                  <select
+                    value={formData.fuelType}
+                    onChange={e => setFormData({ ...formData, fuelType: e.target.value })}
+                    className="w-full border-2 border-black dark:border-gray-700 p-2.5 text-sm font-bold bg-white dark:bg-gray-800 text-black dark:text-white focus:border-[#DA3832] outline-none"
+                  >
+                    {['GASOLINE', 'DIESEL', 'HYBRID', 'ELECTRIC'].map(f => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">CRSP Value (KES)</label>
-                  <input required type="number" step="0.01" value={formData.crsp} onChange={e => setFormData({...formData, crsp: e.target.value})} className="w-full border border-gray-300 dark:border-gray-700 rounded-lg p-2.5 text-sm bg-transparent dark:text-white" placeholder="e.g. 2500000" />
+                  <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">CRSP Value (KES)</label>
+                  <input
+                    required type="number" step="0.01"
+                    value={formData.crsp}
+                    onChange={e => setFormData({ ...formData, crsp: e.target.value })}
+                    placeholder="2500000"
+                    className="w-full border-2 border-black dark:border-gray-700 p-2.5 text-sm font-bold bg-white dark:bg-gray-800 text-black dark:text-white focus:border-[#DA3832] outline-none transition-colors"
+                  />
                 </div>
               </div>
-              <div className="flex gap-3 mt-8">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 px-4 py-3 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 rounded-xl font-bold text-sm transition-colors">Cancel</button>
-                <button type="submit" className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm transition-colors">Save Vehicle</button>
+              <div className="flex gap-3 pt-2">
+                <button type="button" onClick={() => setShowModal(false)}
+                  className="flex-1 py-3 border-2 border-black dark:border-gray-700 text-black dark:text-gray-300 font-black text-xs uppercase tracking-widest hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  Cancel
+                </button>
+                <button type="submit"
+                  className="flex-1 py-3 bg-[#DA3832] text-white font-black text-xs uppercase tracking-widest hover:bg-red-700 transition-colors">
+                  Save Vehicle
+                </button>
               </div>
             </form>
           </div>
@@ -372,12 +357,5 @@ const VehicleDB = () => {
     </div>
   );
 };
-
-const Badge = ({ icon: Icon, text }) => (
-  <div className="flex items-center gap-2 bg-gray-900 border border-gray-700 px-3 py-1.5 rounded-lg">
-    <Icon className="w-3.5 h-3.5 text-gray-500" />
-    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{text}</span>
-  </div>
-);
 
 export default VehicleDB;
