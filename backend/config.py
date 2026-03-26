@@ -1,4 +1,5 @@
 import os
+import datetime
 from dotenv import load_dotenv
 
 # Load .env file
@@ -15,6 +16,9 @@ class Config:
     SECRET_KEY     = os.environ.get("SECRET_KEY",     "keval_secure_secret_key")
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "super-secret-keval-key")
 
+    # --- SESSION EXPIRY ---
+    JWT_ACCESS_TOKEN_EXPIRES = datetime.timedelta(minutes=5)
+
     # --- APP SETTINGS ---
     DEBUG = True
 
@@ -26,3 +30,6 @@ class Config:
     MAIL_USERNAME     = os.environ.get("MAIL_USERNAME")
     MAIL_PASSWORD     = os.environ.get("MAIL_PASSWORD")
     MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER")
+    CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME")
+    CLOUDINARY_API_KEY    = os.environ.get("CLOUDINARY_API_KEY")
+    CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET")

@@ -1,338 +1,296 @@
-from flask import Blueprint, jsonify, request
-from flask_bcrypt import Bcrypt
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt
-from database import mongo
-from bson.objectid import ObjectId
+import secrets
+import string
 import datetime
+from flask import Blueprint, jsonify, request
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt, get_jwt_identity
+from flask_mail import Message
+from bson.objectid import ObjectId
+from database import mongo
+from extensions import mail, bcrypt  # ← bcrypt from extensions, not local
 
 auth = Blueprint('auth', __name__)
-bcrypt = Bcrypt()
 
-# RBAC Role Hierarchy
-ROLE_HIERARCHY = {
-    'viewer': 1,
-    'business_admin': 2, 
-    'super_admin': 3
-}
+def generate_temp_password(length=10):
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
-def normalize_role(role):
-    """Normalize role to lowercase with underscores."""
-    if not role:
-        return "viewer"
-    return role.lower().strip().replace(" ", "_")
+def send_email(subject, recipient, body):
+    msg = Message(subject, recipients=[recipient])
+    msg.body = body
+    try:
+        mail.send(msg)
+        return True
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
 
-def get_role_level(role):
-    """Get hierarchy level for a role."""
-    normalized_role = normalize_role(role)
-    return ROLE_HIERARCHY.get(normalized_role, 0)
+def get_client_ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr)
 
-def can_modify_role(admin_role, target_role, target_user_id=None, current_user_id=None):
-    """Check if admin_role can modify target_role."""
-    admin_level = get_role_level(admin_role)
-    target_level = get_role_level(target_role)
-
-    # Rule 1: Cannot modify own role
-    if target_user_id and current_user_id and str(target_user_id) == str(current_user_id):
-        return False, "Cannot modify your own role"
-
-    # Rule 2: Viewers cannot modify any roles
-    if admin_level <= 1:
-        return False, "Viewers cannot modify roles"
-
-    # Rule 3: Business Admin cannot modify another Business Admin
-    if admin_level == 2 and target_level >= 2:
-        return False, "Business Admins cannot modify other Business Admins"
-
-    # Rule 4: Only Super Admin can modify Business Admin roles
-    if admin_level == 2 and target_level >= 2:
-        return False, "Only Super Admin can modify Business Admin roles"
-
-    # Rule 5: Cannot modify Super Admin (except by Super Admin themselves)
-    if target_level >= 3 and admin_level < 3:
-        return False, "Super Admin roles can only be modified by Super Admins"
-
-    return True, "Role modification allowed"
+def log_event(level, event, message, user=None, ip=None, role=None, extra=None):
+    entry = {
+        "level":     level,
+        "event":     event,
+        "message":   message,
+        "user":      user,
+        "ip":        ip,
+        "role":      role,
+        "timestamp": datetime.datetime.utcnow(),
+    }
+    if extra:
+        entry.update(extra)
+    try:
+        mongo.db.logs.insert_one(entry)
+    except Exception as e:
+        print(f"[LOG ERROR] {e}")
 
 # ==========================
 # 1. LOGIN
 # ==========================
 @auth.route('/login', methods=['POST'])
 def login():
-    data = request.json
-    username = data.get('username')
+    data     = request.json
+    email    = data.get('email')
     password = data.get('password')
+    ip       = get_client_ip()
 
-    if not username or not password:
-        return jsonify({"message": "Username and password required"}), 400
+    if not email or not password:
+        return jsonify({"message": "Email and password required"}), 400
 
-    user = mongo.db.users.find_one({"username": username})
+    user = mongo.db.users.find_one({"email": email})
 
     if user and bcrypt.check_password_hash(user['password'], password):
-        role = normalize_role(user.get('role', 'viewer'))
+        role                 = user.get('role', 'user')
+        must_change_password = user.get('must_change_password', False)
 
         token = create_access_token(
             identity=str(user['_id']),
             additional_claims={"role": role}
         )
 
+        mongo.db.users.update_one(
+            {"_id": user["_id"]},
+            {"$set": {"active_token": token}}
+        )
+
+        log_event(
+            level="INFO",
+            event="login_success",
+            message=f"Successful login for '{email}'",
+            user=email,
+            ip=ip,
+            role=role
+        )
+
         return jsonify({
-            "token": token,
-            "role": role,
-            "username": user['username']
+            "token":                token,
+            "role":                 role,
+            "email":                user['email'],
+            "must_change_password": must_change_password
         }), 200
+
+    log_event(
+        level="WARNING",
+        event="login_failed",
+        message=f"Failed login attempt for '{email}'",
+        user=email,
+        ip=ip,
+        role=None
+    )
 
     return jsonify({"message": "Invalid credentials"}), 401
 
 # ==========================
-# 2. GET ALL USERS (ADMIN)
+# 2. LOGOUT
 # ==========================
-@auth.route('/', methods=['GET'])
+@auth.route('/logout', methods=['POST'])
 @jwt_required()
-def get_users():
-    claims = get_jwt()
-    user_role = normalize_role(claims.get("role"))
-
-    if user_role not in ['super_admin', 'business_admin']:
-        return jsonify({"message": f"Access denied. Role '{user_role}' cannot view users"}), 403
-
-    users = [
-        {"_id": str(u['_id']), "username": u['username'], "role": u.get('role', 'viewer')}
-        for u in mongo.db.users.find()
-    ]
-    return jsonify(users), 200
-
-# ==========================
-# 3. GET MATRIX
-# ==========================
-@auth.route('/matrix', methods=['GET'])
-@jwt_required()
-def get_matrix():
-    claims = get_jwt()
-    user_role = normalize_role(claims.get("role"))
-
-    matrix_data = mongo.db.matrix.find_one({}, {"_id": 0}) or {}
-    
-    if user_role == 'viewer':
-        viewer_permissions = {}
-        for feature, roles in matrix_data.items():
-            viewer_permissions[feature] = {"viewer": roles.get('viewer', False)}
-        return jsonify(viewer_permissions)
-    
-    if user_role not in ['super_admin', 'business_admin']:
-        return jsonify({"message": f"Access denied. Role '{user_role}' cannot view matrix"}), 403
-
-    return jsonify(matrix_data or {}), 200
-
-# ==========================
-# 4. UPDATE MATRIX
-# ==========================
-@auth.route('/update-matrix', methods=['POST'])
-@jwt_required()
-def update_matrix():
-    claims = get_jwt()
-    user_role = normalize_role(claims.get("role"))
-
-    if user_role not in ['super_admin', 'business_admin']:
-        return jsonify({"message": f"Forbidden. Role '{user_role}' cannot update matrix"}), 403
-
-    data = request.json
-    feature = data.get("feature")
-    target_role = normalize_role(data.get("role"))
-    enabled = bool(data.get("enabled", False))
-
-    if not feature or not target_role:
-        return jsonify({"message": "Feature and role are required"}), 400
-
-    if target_role == 'super_admin':
-        return jsonify({"message": "Cannot modify Super Admin privileges"}), 403
-    
-    mongo.db.matrix.update_one(
-        {},
-        {"$set": {f"{feature}.{target_role}": enabled}},
-        upsert=True
-    )
-
-    return jsonify({"message": f"Matrix updated: {feature}.{target_role} = {enabled}"}), 200
-
-# ==========================
-# 5. UPDATE USER ROLE (RBAC ENHANCED)
-# ==========================
-@auth.route('/update-user-role', methods=['POST'])
-@jwt_required()
-def update_user_role():
-    """Enhanced user role update with RBAC validation."""
-    claims = get_jwt()
-    admin_role = normalize_role(claims.get("role"))
-    current_user_id = claims.get("sub")  # Get current user ID from JWT
-
-    if admin_role not in ['super_admin', 'business_admin']:
-        return jsonify({"message": f"Forbidden. Role '{admin_role}' cannot update users"}), 403
-
-    data = request.json
-    user_id = data.get("user_id")
-    new_role = normalize_role(data.get("role"))
-
-    if not user_id or not new_role:
-        return jsonify({"message": "Both user_id and new role are required"}), 400
-
-    target_user = mongo.db.users.find_one({"_id": ObjectId(user_id)})
-    if not target_user:
-        return jsonify({"message": "User not found"}), 404
-
-    target_user_role = normalize_role(target_user.get('role'))
-
-    # Enhanced RBAC validation
-    can_modify, message = can_modify_role(
-        admin_role, new_role, user_id, current_user_id
-    )
-    if not can_modify:
-        return jsonify({"message": message}), 403
-
-    # Log the role change for audit
-    audit_log = {
-        'timestamp': datetime.datetime.utcnow(),
-        'event_type': 'role_change',
-        'changed_by': current_user_id,
-        'target_user': user_id,
-        'old_role': target_user_role,
-        'new_role': new_role,
-        'changed_by_role': admin_role
-    }
-    mongo.db.audit_logs.insert_one(audit_log)
-
-    # Update user role
-    result = mongo.db.users.update_one(
+def logout():
+    user_id = get_jwt_identity()
+    mongo.db.users.update_one(
         {"_id": ObjectId(user_id)},
-        {"$set": {"role": new_role, "role_updated_at": datetime.datetime.utcnow()}}
+        {"$unset": {"active_token": ""}}
     )
-
-    return jsonify({
-        "message": f"User role updated from '{target_user_role}' to '{new_role}' successfully",
-        "old_role": target_user_role,
-        "new_role": new_role,
-        "updated_by": admin_role
-    }), 200
+    return jsonify({"message": "Logged out successfully"}), 200
 
 # ==========================
-# 6. REGISTER USER
+# 3. REGISTER
 # ==========================
 @auth.route('/register', methods=['POST'])
-@jwt_required()
 def register():
-    claims = get_jwt()
-    creator_role = normalize_role(claims.get("role"))
+    data  = request.json
+    email = data.get('email')
+    token = data.get('token')
+    ip    = get_client_ip()
 
-    matrix = mongo.db.matrix.find_one({}, {"_id": 0}) or {}
-    allowed = matrix.get("create_users", {}).get(creator_role, False)
+    if not email:
+        return jsonify({"message": "Email is required"}), 400
 
-    if not allowed:
-        return jsonify({"message": "Forbidden: You cannot create users"}), 403
+    if mongo.db.users.find_one({"email": email}):
+        return jsonify({"message": "User already exists"}), 400
 
-    data = request.json
-    username = data.get('username')
-    password = data.get('password')
-    new_role = normalize_role(data.get('role', 'viewer'))
+    role   = 'user'
+    invite = None
 
-    if not username or not password:
-        return jsonify({"message": "Username and password are required"}), 400
+    if token:
+        invite = mongo.db.invites.find_one({"token": token, "email": email, "used": False})
+        if not invite:
+            return jsonify({"message": "Invalid or expired invite token"}), 400
+        if invite['expires_at'] < datetime.datetime.utcnow():
+            return jsonify({"message": "Invite token has expired"}), 400
+        role = invite.get('role', 'business_admin')
 
-    if mongo.db.users.find_one({"username": username}):
-        return jsonify({"message": "Username already exists"}), 400
+    temp_password   = generate_temp_password()
+    hashed_password = bcrypt.generate_password_hash(temp_password).decode('utf-8')
 
-    hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
-    
-    mongo.db.users.insert_one({
-        "username": username,
-        "password": hashed_password,
-        "role": new_role,
-        "createdAt": datetime.datetime.utcnow()
-    })
-
-    return jsonify({"message": "User created successfully"}), 201
-
-# ==========================
-# 7. INIT MATRIX
-# ==========================
-@auth.route('/init-matrix', methods=['GET'])
-def init_matrix():
-    """Initialize default access matrix in DB."""
-    default_matrix = {
-        "view_dashboard":    {"super_admin": True,  "business_admin": True,  "viewer": True},
-        "calculate_taxes":   {"super_admin": True,  "business_admin": True,  "viewer": True},
-        "search_vehicle_db": {"super_admin": True,  "business_admin": True,  "viewer": True},
-        "add_vehicles":      {"super_admin": True,  "business_admin": True,  "viewer": False}, 
-        "edit_vehicles":     {"super_admin": True,  "business_admin": True,  "viewer": False},
-        "create_users":      {"super_admin": True,  "business_admin": True,  "viewer": False},
-        "assign_user_roles": {"super_admin": True,  "business_admin": True,  "viewer": False}
+    user_data = {
+        "email":                email,
+        "password":             hashed_password,
+        "role":                 role,
+        "must_change_password": True,
+        "createdAt":            datetime.datetime.utcnow()
     }
-    mongo.db.matrix.replace_one({}, default_matrix, upsert=True)
-    return jsonify({"message": "Matrix loaded successfully"}), 200
+
+    mongo.db.users.insert_one(user_data)
+
+    if invite:
+        mongo.db.invites.update_one({"_id": invite['_id']}, {"$set": {"used": True}})
+
+    email_body = (
+        f"Welcome to Vehicle Valuation!\n"
+        f"Your temporary password is: {temp_password}\n"
+        f"Please log in and change your password immediately."
+    )
+
+    print(f"🔐 TEMP PASSWORD SENT: Email={email}, Password={temp_password}")
+    send_email("Your Temporary Password", email, email_body)
+
+    log_event(
+        level="INFO",
+        event="user_created",
+        message=f"New user '{email}' registered with role '{role}'",
+        user=email,
+        ip=ip,
+        role=role
+    )
+
+    return jsonify({"message": "Registration successful. Check your email for a temporary password."}), 201
 
 # ==========================
-# 8. GET ROLE OPTIONS (RBAC ENHANCED)
+# 4. VALIDATE INVITE
 # ==========================
-@auth.route('/role-options', methods=['GET'])
+@auth.route('/validate-invite', methods=['GET'])
+def validate_invite():
+    token = request.args.get('token')
+    if not token:
+        return jsonify({"valid": False, "message": "Token is required"}), 400
+
+    invite = mongo.db.invites.find_one({"token": token, "used": False})
+    if not invite or invite['expires_at'] < datetime.datetime.utcnow():
+        return jsonify({"valid": False, "message": "Invalid or expired token"}), 400
+
+    return jsonify({"valid": True, "email": invite['email']}), 200
+
+# ==========================
+# 5. CHANGE PASSWORD
+# ==========================
+@auth.route('/change-password', methods=['POST'])
 @jwt_required()
-def get_role_options():
-    """Get available role options for current user."""
-    claims = get_jwt()
-    current_role = normalize_role(claims.get("role"))
-    target_user_id = request.args.get('target_user_id')
+def change_password():
+    user_id      = get_jwt_identity()
+    data         = request.json
+    new_password = data.get('new_password')
+    ip           = get_client_ip()
 
-    # Get target user role if specified
-    target_user_role = None
-    if target_user_id:
-        target_user = mongo.db.users.find_one({"_id": ObjectId(target_user_id)})
-        if target_user:
-            target_user_role = target_user.get('role')
+    if not new_password:
+        return jsonify({"message": "New password is required"}), 400
 
-    # Get available options based on current user's role
-    current_level = get_role_level(current_role)
-    target_level = get_role_level(target_user_role) if target_user_role else 0
+    hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
 
-    options = []
-    if current_level >= 3:  # Super Admin
-        options = [
-            {'value': 'viewer', 'label': 'Viewer', 'enabled': True},
-            {'value': 'business_admin', 'label': 'Business Admin', 'enabled': True},
-            {'value': 'super_admin', 'label': 'Super Admin', 'enabled': target_level < 3}
-        ]
-    elif current_level == 2:  # Business Admin
-        options = [
-            {'value': 'viewer', 'label': 'Viewer', 'enabled': True}
-        ]
-        if target_level == 1:  # Can promote Viewer to Business Admin
-            options.append({'value': 'business_admin', 'label': 'Business Admin', 'enabled': True})
-    else:  # Viewer
-        options = [
-            {'value': 'viewer', 'label': 'Viewer', 'enabled': False}
-        ]
+    mongo.db.users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"password": hashed_password, "must_change_password": False}}
+    )
 
-    return jsonify({
-        "current_user_role": current_role,
-        "target_user_role": target_user_role,
-        "available_options": options
-    }), 200
+    log_event(
+        level="INFO",
+        event="password_reset",
+        message=f"User '{user_id}' changed their password",
+        user=user_id,
+        ip=ip
+    )
+
+    return jsonify({"message": "Password updated successfully"}), 200
 
 # ==========================
-# 9. GET USER PERMISSIONS
+# 6. FORGOT PASSWORD
 # ==========================
-@auth.route('/user-permissions', methods=['GET'])
-@jwt_required()
-def get_user_permissions():
-    """Get current user's permissions."""
-    claims = get_jwt()
-    user_role = normalize_role(claims.get("role"))
+@auth.route('/forgot-password', methods=['POST'])
+def forgot_password():
+    data  = request.json
+    email = data.get('email')
+    ip    = get_client_ip()
 
-    # Get user permissions from matrix
-    matrix_data = mongo.db.matrix.find_one({}, {"_id": 0}) or {}
-    permissions = {}
-    
-    for permission, roles in matrix_data.items():
-        permissions[permission] = roles.get(user_role, False)
+    if not email:
+        return jsonify({"message": "Email is required"}), 400
 
-    return jsonify({
-        "user_role": user_role,
-        "permissions": permissions,
-        "role_level": get_role_level(user_role)
-    }), 200
+    user = mongo.db.users.find_one({"email": email})
+    if user:
+        token      = secrets.token_urlsafe(32)
+        expires_at = datetime.datetime.utcnow() + datetime.timedelta(hours=1)
+
+        mongo.db.password_resets.update_one(
+            {"email": email},
+            {"$set": {"token": token, "expires_at": expires_at}},
+            upsert=True
+        )
+
+        reset_link = f"http://localhost:5173/reset-password?token={token}"
+        email_body = f"Click here to reset your password: {reset_link}"
+        send_email("Password Reset", email, email_body)
+
+        log_event(
+            level="INFO",
+            event="password_reset",
+            message=f"Password reset requested for '{email}'",
+            user=email,
+            ip=ip
+        )
+
+    return jsonify({"message": "If that email is in our system, we've sent a reset link."}), 200
+
+# ==========================
+# 7. RESET PASSWORD
+# ==========================
+@auth.route('/reset-password', methods=['POST'])
+def reset_password():
+    data         = request.json
+    token        = data.get('token')
+    new_password = data.get('new_password')
+    ip           = get_client_ip()
+
+    if not token or not new_password:
+        return jsonify({"message": "Token and new password required"}), 400
+
+    reset_record = mongo.db.password_resets.find_one({"token": token})
+    if not reset_record or reset_record['expires_at'] < datetime.datetime.utcnow():
+        return jsonify({"message": "Invalid or expired token"}), 400
+
+    email           = reset_record['email']
+    hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+
+    mongo.db.users.update_one(
+        {"email": email},
+        {"$set": {"password": hashed_password, "must_change_password": False}}
+    )
+    mongo.db.password_resets.delete_one({"_id": reset_record['_id']})
+
+    log_event(
+        level="INFO",
+        event="password_reset",
+        message=f"Password successfully reset for '{email}'",
+        user=email,
+        ip=ip
+    )
+
+    return jsonify({"message": "Password reset successful"}), 200
